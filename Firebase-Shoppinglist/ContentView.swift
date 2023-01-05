@@ -7,12 +7,53 @@
 
 import SwiftUI
 import Firebase
+import FirebaseAuth
 
-// förbättra strukturen genom att lägga över shoppinglistan ( items)
+// 1. förbättra strukturen genom att lägga över shoppinglistan ( items)
 // i ett observable object
 
+// 2. användaren kan välja att skapa ett konto i en instälnings sida.
+//
 
 struct ContentView: View {
+    
+    @State var signedIn = false
+    
+    var body: some View {
+        if !signedIn {
+            SigningInView(signedIn: $signedIn)
+        } else   {
+            ShoppinListView()
+        }
+    }
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
+}
+
+struct SigningInView: View {
+    @Binding var signedIn : Bool
+    
+    var body: some View {
+        Text("Not working signing in")
+            .onAppear(){
+                Auth.auth().signInAnonymously { authResult, error in
+                    if let error = error {
+                        print("error signing in \(error)")
+                        
+                    } else {
+                        print("Signed in \(Auth.auth().currentUser?.uid)")
+                        signedIn = true
+                    }
+                }
+            }
+    }
+}
+
+struct ShoppinListView: View {
     let db = Firestore.firestore()
     
     @State var items = [Item]()
@@ -21,45 +62,41 @@ struct ContentView: View {
         VStack {
             List {
                 ForEach(items) { item in
-                    HStack {
-                        Text(item.name)
-                        Spacer()
-                        Button(action: {
-                            if let id = item.id {
-                                db.collection("items").document(id).updateData(["done": !item.done])
-                            }
-                        }) {
-                            Image(systemName: item.done ? "checkmark.square" : "square")
-                        }
-                    }
+                    ItemRowView(item: item)
                 }.onDelete() { indexSet in
                     for index in indexSet {
                         let item = items[index]
-                        if let id = item.id {
-                            db.collection("items").document(id).delete()
+                        if let id = item.id,
+                           let user = Auth.auth().currentUser
+                        {
+                            db.collection("users").document(user.uid).collection("items").document(id).delete()
                         }
                     }
                 }
             }
         }.onAppear() {
-           // saveToFirestore(itemName: "mjölk")
-           listenToFirestore()
+            //  saveToFirestore(itemName: "pepsi")
+            listenToFirestore()
         }
         .padding()
     }
     
     func saveToFirestore(itemName: String) {
         let item = Item(name: itemName)
-    
+        guard let user = Auth.auth().currentUser else {return}
+        
         do {
-            _ = try db.collection("items").addDocument(from: item)
+            _ = try db.collection("users").document(user.uid).collection("items").addDocument(from: item)
         } catch {
             print("Error saving to DB")
         }
     }
     
     func listenToFirestore() {
-        db.collection("items").addSnapshotListener { snapshot, err in
+        
+        guard let user = Auth.auth().currentUser else {return}
+        
+        db.collection("users").document(user.uid).collection("items").addSnapshotListener { snapshot, err in
             guard let snapshot = snapshot else {return}
             
             if let err = err {
@@ -81,11 +118,29 @@ struct ContentView: View {
             }
         }
     }
+    
+    
 }
 
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+struct ItemRowView: View {
+    let db = Firestore.firestore()
+    
+    let item : Item
+    
+    var body: some View {
+        HStack {
+            Text(item.name)
+            Spacer()
+            Button(action: {
+                if let id = item.id,
+                   let user = Auth.auth().currentUser
+                {
+                    db.collection("users").document(user.uid)
+                        .collection("items").document(id).updateData(["done": !item.done])
+                }
+            }) {
+                Image(systemName: item.done ? "checkmark.square" : "square")
+            }
+        }
     }
 }
