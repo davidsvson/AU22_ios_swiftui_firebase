@@ -13,7 +13,7 @@ import FirebaseAuth
 // i ett observable object
 
 // 2. användaren kan välja att skapa ett konto i en instälnings sida.
-//
+// konvetera det anonyma kontot till ett nytt konto
 
 struct ContentView: View {
     
