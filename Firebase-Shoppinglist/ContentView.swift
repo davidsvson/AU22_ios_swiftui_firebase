@@ -17,24 +17,6 @@ struct ContentView: View {
     
     @State var items = [Item]()
     
-//    init() {
-//        var male = true
-//
-//        var age = 25
-//        var name = ""
-//
-//        if age > 30 {
-//            name = "david"
-//        } else {
-//            name = "susan"
-//        }
-//
-//        //ternary operator
-//        name = age > 30 ? "david" : "susan"
-//
-//
-//    }
-    
     var body: some View {
         VStack {
             List {
@@ -43,7 +25,9 @@ struct ContentView: View {
                         Text(item.name)
                         Spacer()
                         Button(action: {
-                            db.collection("items").document(item.id).updateData(["done": !item.done])
+                            if let id = item.id {
+                                db.collection("items").document(id).updateData(["done": !item.done])
+                            }
                         }) {
                             Image(systemName: item.done ? "checkmark.square" : "square")
                         }
@@ -51,23 +35,27 @@ struct ContentView: View {
                 }.onDelete() { indexSet in
                     for index in indexSet {
                         let item = items[index]
-                        db.collection("items").document(item.id).delete()
+                        if let id = item.id {
+                            db.collection("items").document(id).delete()
+                        }
                     }
                 }
             }
         }.onAppear() {
+           // saveToFirestore(itemName: "mjölk")
            listenToFirestore()
         }
         .padding()
     }
     
     func saveToFirestore(itemName: String) {
-        //let item = Item(name: itemName)
+        let item = Item(name: itemName)
     
-        //db.collection("items").addDocument(from: item)
-        db.collection("items").addDocument(data: ["name" : itemName,
-                                                  "category" : "",
-                                                  "done": false])
+        do {
+            _ = try db.collection("items").addDocument(from: item)
+        } catch {
+            print("Error saving to DB")
+        }
     }
     
     func listenToFirestore() {
@@ -79,11 +67,16 @@ struct ContentView: View {
             } else {
                 items.removeAll()
                 for document in snapshot.documents {
-                    let item = Item(id: document.documentID,
-                                    name: document["name"] as! String,
-                                    category: document["category"] as! String,
-                                    done: document["done"] as! Bool)
-                    items.append(item)
+
+                    let result = Result {
+                        try document.data(as: Item.self)
+                    }
+                    switch result  {
+                    case .success(let item)  :
+                        items.append(item)
+                    case .failure(let error) :
+                        print("Error decoding item: \(error)")
+                    }
                 }
             }
         }
